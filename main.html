@@ -1,0 +1,344 @@
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>OpenGameDb Curator</title>
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
+  </head>
+  <body>
+    <h1>OpenGameDb Curator</h1>
+
+    <div id="overlay">Saving, Please Wait..</div>
+
+    <div style="text-align:center;">    
+        <label>Select Database</label>
+        <br />
+        <select id="db_select"></select>
+    </div>
+
+    <div id="unsaved">Unsaved Changes! <button id="save">Save</button></div>
+
+
+    <div id="listView"></div>
+    <div id="detailView">
+        <h2 id="gametitle"></h2>
+        <img id="gameimg" src="" alt="" width="25%">
+        <input type="text" id="img_url"><button id="copy_img">copy</button>
+
+        <div id="gameimgwarn">This image isn't in a permanent location! Please use <pre>https://postimages.org/web<pre></div>
+
+
+        <label for="title">Title</label>
+        <input type="text" id="title">
+
+        <label for="description">Description</label>
+        <textarea id="description"></textarea>
+
+        <label for="genre">Genre</label>
+        <input type="text" id="genre">
+
+        <label for="gs_score">GameFaqs Score</label>
+        <input type="text" id="gf_score">
+
+        <label for="metascore">Metascore</label>
+        <input type="text" id="metascore">
+
+        <label for="released">Release Date</label>
+        <input type="text" id="released">
+
+    </div>
+
+
+  </body>
+
+    <script>
+
+const electron = require("electron");
+const {ipcRenderer, clipboard} = electron;
+
+let currentDataset = null;
+let currentGame = null;
+let currentRow = null;
+let currentFile = null;
+
+const select = document.querySelector("#db_select");
+const menu = document.querySelector("#listView");
+const overlay = document.querySelector("#overlay");
+overlay.style.display = "none";
+const copyButton = document.querySelector("#copy_img");
+const saveButton = document.querySelector("#save");
+
+const gameTitle = document.querySelector("#gametitle");
+const gameImg = document.querySelector("#gameimg");
+const gameImgWarn = document.querySelector("#gameimgwarn");
+gameImgWarn.style.display = "none";
+
+const input_title = document.querySelector("#title");
+input_title.addEventListener("change", (ev) => {
+    currentGame.title = ev.target.value.trim();
+});
+
+const input_img_url = document.querySelector("#img_url");
+input_img_url.addEventListener("change", (ev) => {
+    currentGame.cover_art_url = ev.target.value.trim();
+    gameImg.setAttribute("src", ev.target.value);
+
+    if (currentGame.cover_art_url.indexOf("postimg.cc") == -1) {
+        gameImgWarn.style.display = "block";
+    }
+    else {
+        gameImgWarn.style.display = "none";
+    }
+});
+
+const input_description = document.querySelector("#description");
+input_description.addEventListener("change", (ev) => {
+    currentGame.description = ev.target.value.trim();
+});
+
+const input_genre = document.querySelector("#genre");
+input_genre.addEventListener("change", (ev) => {
+    currentGame.genre = ev.target.value.trim();
+});
+
+const input_gfscore = document.querySelector("#gf_score");
+input_gfscore.addEventListener("change", (ev) => {
+    currentGame.gf_score = ev.target.value.trim();
+});
+
+const input_metascore = document.querySelector("#metascore");
+input_metascore.addEventListener("change", (ev) => {
+    currentGame.metascore = ev.target.value.trim();
+});
+
+const input_released = document.querySelector("#released");
+input_released.addEventListener("change", (ev) => {
+    currentGame.released = ev.target.value.trim();
+});
+
+const unsavedPopup = document.querySelector("#unsaved");
+unsavedPopup.style.display = "none";
+
+const allInputs = document.querySelectorAll("#detailView input, #detailView textarea");
+console.log(allInputs);
+allInputs.forEach((el) => {
+    el.addEventListener("change", (ev)=>{
+        unsavedPopup.style.display="block";
+    });
+});
+
+
+copyButton.addEventListener("click", (ev) =>{
+    if (currentGame && currentGame.cover_art_url)
+        clipboard.writeText(currentGame.cover_art_url);
+});
+
+saveButton.addEventListener("click", (ev) =>{
+    if (currentGame)
+        clipboard.writeText(currentGame.cover_art_url);
+
+    console.log("save at file" + currentFile);
+    console.log("save at row " + currentRow);
+    console.log(currentGame);
+
+    unsavedPopup.style.display="hidden";
+    overlay.style.display = "block";
+    ipcRenderer.send("save", currentFile, currentRow, currentGame);
+});
+
+
+var empty = function (node) {
+    var last;
+    while (last = node.lastChild) node.removeChild(last);
+};
+
+let files = ipcRenderer.send("wantFiles");
+
+ipcRenderer.on("wantFiles", (ev, files) => {
+    empty(select);
+
+    for (i=0; i<files.length; i++) {
+        const option = document.createElement("option");
+        option.text = files[i];
+        option.value = files[i];
+
+        select.add(option, null);
+    }
+
+    ipcRenderer.send("wantContents", select.value);
+});
+
+function changeGame(game, row) {
+    console.log(game);
+
+    unsavedPopup.style.display = "none";
+
+    currentGame = game;
+    currentRow = row;
+
+    gameTitle.innerText = game.title;
+    gameImg.setAttribute("src", game.cover_art_url);
+
+    if (game.cover_art_url.indexOf("postimg.cc") == -1) {
+        gameImgWarn.style.display = "block";
+    }
+    else {
+        gameImgWarn.style.display = "none";
+    }
+
+    input_img_url.value = game.cover_art_url;
+    input_title.value = game.title;
+    input_description.value = game.description;
+    input_genre.value = game.genre;
+    input_gfscore.value = game.gf_score;
+    input_metascore.value = game.metascore;
+    input_released.value = game.released;
+}
+
+select.addEventListener("change", () => {
+    ipcRenderer.send("wantContents", select.value);
+});
+
+ipcRenderer.on("wantContents", (ev, lines) => {
+
+    currentFile = select.value;
+    currentDataset = lines;
+
+    const df = document.createDocumentFragment();
+
+    for (i=0; i < lines.length; i++) {
+        let el = document.createElement("div");
+        el.setAttribute("class", "title");
+        el.setAttribute("data-row", i+2);
+        el.setAttribute("data-index", i);
+        el.innerText = lines[i].title;
+
+        el.addEventListener("click", (ev) => {
+            let game = currentDataset[ev.target.dataset.index];
+            changeGame(game, ev.target.dataset.row); 
+        });
+
+        df.append(el);
+    }
+
+    empty(menu);
+    menu.append(df);
+
+    let game = currentDataset[0];
+    changeGame(game, 2); 
+    overlay.style.display = "none";
+    unsaved.style.display = "none";
+});
+
+ipcRenderer.on("save", (ev, reults) => {
+    ipcRenderer.send("wantContents", select.value);
+});
+
+
+
+    </script>
+
+<style>
+    body {
+        background-color: #222222;
+        color: #eeeeee;
+        font-family: sans-serif;
+    }
+
+    #listView {
+        padding-top: 1em;
+        width: 20%;
+        overflow: hidden;
+        overflow-y: auto;
+        height: 90%;
+
+        vertical-align:top;
+        display: inline-block;
+        box-sizing:border-box; 
+    }
+
+    #detailView {
+        text-align:center;
+        width: 79%;
+        padding: 1em;
+        overflow: hidden;
+
+        vertical-align:top;
+        display: inline-block;
+        box-sizing:border-box; 
+    }
+
+    input {
+        border: 1px solid #666;
+        border-radius: 2px;
+    }
+
+    #detailView > input {
+        display:inline-block;
+        width:80%;
+        margin: 0.5em;
+    }
+
+    #detailView > textarea {
+        display:inline-block;
+        width:80%;
+        height: 20%;
+        margin: 0.5em;
+    }
+
+    #gameimgwarn {
+        background-color: darkred;
+        padding: 0.6em;
+        margin: 1em;
+        color:white;
+        border-radius: 2px;
+        border: 2px solid red;
+    }
+
+    .title {
+        white-space: nowrap;
+        padding: 0.1em;
+    }
+
+    .title:hover {
+        background-color: rgba(255,255,255,0.2);
+    }
+
+    #detailView label {
+        display: inline-block;
+        text-align:left;
+        text-indent: 1em;
+        width: 80%;
+        color: darkgrey;
+        font-size: 0.8em;
+        padding-top: 0.5em;
+    }
+
+    #unsaved {
+        color: #eeeeee;
+        font-family: sans-serif;
+        display: inline-block;
+        position: fixed;
+        width: 100%;
+        top: 0px;
+        left: 0px;
+        background-color: rgba(78, 158, 78, 0.84);
+        text-align: center;
+        padding: 1em;
+        border-bottom-left-radius: 1em;
+        border-bottom-right-radius: 1em;
+        border-bottom: 1px solid white;
+        box-sizing: border-box;
+    }
+
+    #overlay {
+        position: fixed;
+        height: 100%;
+        width: 100%;
+        z-index: 9999;
+        background: rgba(0,0,0,0.8);
+        text-align: center;
+        vertical-align: center;
+        font-size: 2em;
+    }
+</style>
+</html>
