@@ -10,9 +10,16 @@
     <div id="overlay">Saving, Please Wait..</div>
 
     <div style="text-align:center;">    
-        <label>Select Database</label>
-        <br />
-        <select id="db_select"></select>
+        <div style="display:inline-block">
+            <label>Select Database</label>
+            <br />
+            <select id="db_select"></select>
+        </div>
+        <div style="display:inline-block">
+            <label>Filter Results for Database</label>
+            <br />
+            <input id="db_filter" type="text" id="db_filter" />
+        </div>
     </div>
 
     <div id="unsaved">Unsaved Changes! <button id="save">Save</button></div>
@@ -61,6 +68,7 @@ let currentRow = null;
 let currentFile = null;
 
 const select = document.querySelector("#db_select");
+const filter = document.querySelector("#db_filter");
 const menu = document.querySelector("#listView");
 const overlay = document.querySelector("#overlay");
 overlay.style.display = "none";
@@ -197,6 +205,9 @@ function changeGame(game, row) {
 select.addEventListener("change", () => {
     ipcRenderer.send("wantContents", select.value);
 });
+filter.addEventListener("change", () => {
+    ipcRenderer.send("wantContents", select.value);
+});
 
 ipcRenderer.on("wantContents", (ev, lines) => {
 
@@ -206,18 +217,23 @@ ipcRenderer.on("wantContents", (ev, lines) => {
     const df = document.createDocumentFragment();
 
     for (i=0; i < lines.length; i++) {
-        let el = document.createElement("div");
-        el.setAttribute("class", "title");
-        el.setAttribute("data-row", i+2);
-        el.setAttribute("data-index", i);
-        el.innerText = lines[i].title;
 
-        el.addEventListener("click", (ev) => {
-            let game = currentDataset[ev.target.dataset.index];
-            changeGame(game, ev.target.dataset.row); 
-        });
+        if (filter.value.length == 0 
+            || lines[i].title.toLowerCase().includes(filter.value.toLowerCase())) 
+        {
+            let el = document.createElement("div");
+            el.setAttribute("class", "title");
+            el.setAttribute("data-row", i+2);
+            el.setAttribute("data-index", i);
+            el.innerText = lines[i].title;
 
-        df.append(el);
+            el.addEventListener("click", (ev) => {
+                let game = currentDataset[ev.target.dataset.index];
+                changeGame(game, ev.target.dataset.row); 
+            });
+
+            df.append(el);
+        }
     }
 
     empty(menu);
